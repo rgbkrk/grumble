@@ -19,6 +19,8 @@ var _ = require("lodash");
 var chalk = require("chalk");
 var treeify = require("treeify");
 
+var ops = require("rxjs/operators");
+
 // Neat trick to sleep in an async/await setup
 // > await sleep(100)
 function sleep(duration) {
@@ -32,7 +34,10 @@ async function main() {
 
   var argv = require("yargs")
     .default("kernel", function randomKernel() {
-      return _.sample(ks).name;
+      console.log("selecting a random kernel as default...");
+      const name = _.sample(ks).name;
+      console.log(`chose ${name}`);
+      return name;
     })
     .alias("k", "kernel")
     .describe("k", "the kernel to run")
@@ -40,7 +45,7 @@ async function main() {
 
   const kernelName = argv.kernel;
 
-  console.log(kernelName);
+  console.log("running demo with ", kernelName);
 
   await runKernel(ks[kernelName].spec);
 }
@@ -76,12 +81,18 @@ async function runKernel(kernelSpec) {
     }
   });
 
+  process.on("SIGINT", () => {
+    spawn.kill();
+    // Clean up the connection file
+    fs.unlinkSync(connectionFile);
+  });
+
   //// OH SNAP, if it fails to launch above here we are waiting forever
   // Set up an Rx Subject to send and receive Jupyter messages
-  var channel = await enchannel.createMainChannel(config);
+  var channels = await enchannel.createMainChannel(config);
 
   // Log every message we get back from the kernel
-  var subscription = channel.subscribe(
+  var subscription = channels.subscribe(
     msg => {
       console.log(chalk.bold(msg.header.msg_type));
       console.log(
@@ -92,23 +103,22 @@ async function runKernel(kernelSpec) {
   );
 
   // 😴  sleep instead of setting up a Rx stream to send kernel info requests until we get a reply
-  await sleep(200);
-  channel.next(messaging.kernelInfoRequest());
+  await sleep(2000);
+  channels.next(messaging.kernelInfoRequest());
   // 💤
-  await sleep(200);
-  channel.next(messaging.kernelInfoRequest());
+  await sleep(2000);
+  channels.next(messaging.kernelInfoRequest());
 
   // BIG DATA
-  channel.next(messaging.executeRequest("2 + 2"));
-
-  // 😴  sleep so that our BIG DATA computation finishes
-  await sleep(400);
+  channels.next(messaging.executeRequest("2 + 2"));
+  // Wait for some big data
+  await sleep(3000);
 
   // Stop the child process for the kernel
   spawn.kill();
 
   // Close the subject
-  channel.complete();
+  channels.complete();
 
   // Close the subscription
   subscription.complete();
