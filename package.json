@@ -4,7 +4,7 @@
   "main": "index.js",
   "license": "MIT",
   "scripts": {
-    "dev": "nodemon ./index.js"
+    "dev": "nodemon ./index.js demo"
   },
   "dependencies": {
     "@nteract/messaging": "^4.0.0",
