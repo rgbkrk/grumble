@@ -1,3 +1,3 @@
 module.exports = {
-  all: [require("./demo")]
+  all: [require("./demo"), require("./collect")]
 };
