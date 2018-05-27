@@ -131,6 +131,7 @@ async function runNotebook(context) {
       ? cell.source.join("")
       : cell.source;
     // console.log(source);
+    // Next up is figuring out how we'll coordinate collecting outputs
   });
 
   await sleep(1000);
