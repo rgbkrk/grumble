@@ -1,3 +1,4 @@
+// @flow
 // kernelspecs lib lets you find jupyter kernels on disk
 var kernelspecs = require("kernelspecs");
 

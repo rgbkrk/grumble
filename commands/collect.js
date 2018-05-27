@@ -25,12 +25,34 @@ var enchannel = require("enchannel-zmq-backend");
 // Little helpers for creating jupyter messages
 var messaging = require("@nteract/messaging");
 
+type DiskCodeCell = {
+  cell_type: "code",
+  source: string
+};
+
+type DiskMarkdownCell = {
+  cell_type: "markdown",
+  source: string
+};
+
+type DiskCell = DiskCodeCell | DiskMarkdownCell;
+
+type DiskNotebook = {
+  cells: Array<DiskCell>
+};
+
 async function runNotebook(context) {
   const data = await fso.readFileObservable(context.file).toPromise();
   const rawNotebook = JSON.parse(data);
-  console.log(rawNotebook);
-
   console.log(rawNotebook.cells);
+
+  // Still to this day I don't know how I check a raw object to make sure it
+  // AND type cast it to a flow type that is validated
+
+  rawNotebook.cells.forEach(cell => {
+    const source = cell.source;
+    console.log(cell.source);
+  });
 
   // get kernel, unless overridden by context
 }

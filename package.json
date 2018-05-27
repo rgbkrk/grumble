@@ -4,7 +4,7 @@
   "main": "index.js",
   "license": "MIT",
   "scripts": {
-    "dev": "nodemon --exec babel-node ./index.js demo"
+    "dev": "nodemon --exec babel-node ./index.js collect --file ./hsl-wow.ipynb"
   },
   "dependencies": {
     "@nteract/messaging": "^4.0.0",
