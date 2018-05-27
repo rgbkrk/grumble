@@ -64,12 +64,88 @@ async function runNotebook(context) {
     "python3"
   );
 
+  let kernelspec = context.kernelspecs[kernelName];
+  if (!kernelspec) {
+    kernelspec = _.find(
+      context.kernelspecs,
+      ks => ks.spec.language === kernelName
+    );
+  }
+
+  var { config, spawn, connectionFile } = await spawnteract.launchSpec(
+    kernelspec.spec,
+    {
+      cwd: "/tmp",
+      // No STDIN, opt in to STDOUT and STDERR as node streams
+      stdio: ["ignore", "pipe", "pipe"]
+    }
+  );
+
+  // Route everything that we won't get in messages to our own stdout
+  spawn.stdout.on("data", data => {
+    const text = data.toString();
+    console.log("KERNEL STDOUT: ", text);
+  });
+  spawn.stderr.on("data", data => {
+    const text = data.toString();
+    console.log("KERNEL STDERR: ", text);
+  });
+
+  spawn.on("close", code => {
+    console.log(code);
+    if (code) {
+      console.log("closed early and poorly", code);
+      process.exit(code);
+    }
+    // If the process ends early, we should too in this case
+    process.exit(0);
+  });
+
+  process.on("SIGINT", what => {
+    // Try to kill the process
+    try {
+      spawn.kill();
+    } catch (e) {}
+    // Clean up the connection file
+    try {
+      fs.unlinkSync(connectionFile);
+    } catch (e) {}
+    process.exit(1);
+  });
+
+  //// OH SNAP, if it fails to launch yet doesn't die above here we are possibly waiting forever
+  // Set up an Rx Subject to send and receive Jupyter messages
+  var channels = await enchannel.createMainChannel(config);
+  var subscription = channels.subscribe(
+    msg => {
+      console.log(chalk.bold(msg.header.msg_type));
+      console.log(
+        treeify.asTree(_.omit(msg, ["buffers", "parent_header"]), true)
+      );
+    },
+    err => console.error(err)
+  );
+
   rawNotebook.cells.forEach((cell: DiskCell) => {
     const source = Array.isArray(cell.source)
       ? cell.source.join("")
       : cell.source;
     // console.log(source);
   });
+
+  await sleep(1000);
+
+  // Stop the child process for the kernel
+  spawn.kill();
+
+  // Close the subject
+  channels.complete();
+
+  // Close the subscription
+  subscription.complete();
+
+  // Clean up the connection file
+  fs.unlinkSync(connectionFile);
 
   // get kernel, unless overridden by context
 }
