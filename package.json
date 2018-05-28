@@ -13,6 +13,7 @@
     "fs-observable": "^2.1.0",
     "kernelspecs": "^2.0.0",
     "lodash": "^4.17.10",
+    "rethinkdb": "^2.3.3",
     "spawnteract": "^4.0.0",
     "styled-jsx": "^2.2.6",
     "treeify": "^1.1.0",
