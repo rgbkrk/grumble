@@ -1,5 +1,8 @@
+// @flow
 // Standard file system yo
 var fs = require("fs");
+
+const yargs = require("yargs");
 
 import { first, map, mapTo, filter, tap } from "rxjs/operators";
 
@@ -40,6 +43,7 @@ type DiskMarkdownCell = {
 type DiskCell = DiskCodeCell | DiskMarkdownCell;
 
 type DiskNotebook = {
+  metadata: Object,
   cells: Array<DiskCell>
 };
 
@@ -48,9 +52,19 @@ function prettyMessage(msg) {
   console.log(treeify.asTree(_.omit(msg, ["buffers", "parent_header"]), true));
 }
 
-async function runNotebook(context) {
+type Context = {
+  kernelspecs: {
+    [string]: {
+      name: string,
+      spec: Object
+    }
+  },
+  file: string
+};
+
+async function runNotebook(context: Context) {
   const data = await fso.readFileObservable(context.file).toPromise();
-  const rawNotebook: DiskNotebook = JSON.parse(data);
+  const rawNotebook: DiskNotebook = JSON.parse(data.toString());
 
   // Still to this day I don't know how I check a raw object to make sure it
   // AND type cast it to a flow type that is validated
@@ -126,11 +140,14 @@ async function runNotebook(context) {
 
   //// OH SNAP, if it fails to launch yet doesn't die above here we are possibly waiting forever
   // Set up an Rx Subject to send and receive Jupyter messages
-  var channels = await enchannel.createMainChannel(config);
+  // $FlowFixMe
+  var channels: rxjs$Subject<
+    JupyterMessage<any, any>
+  > = await enchannel.createMainChannel(config);
 
   var subscription = channels.subscribe(
     msg => {
-      if (msg.parent_header) {
+      if (msg.parent_header && typeof msg.parent_header.msg_id === "string") {
         const parent_id = msg.parent_header.msg_id;
 
         // Collect all messages
@@ -231,13 +248,13 @@ async function runNotebook(context) {
   channels.complete();
 
   // Close the subscription
-  subscription.complete();
+  subscription.unsubscribe();
 
   // Clean up the connection file
   fs.unlinkSync(connectionFile);
 }
 
-function builder(yargs) {
+function builder(yargs: yargs) {
   return yargs.option("file", {
     alias: "f",
     describe: "the file / notebook to run",
