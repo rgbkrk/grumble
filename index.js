@@ -16,9 +16,7 @@ async function main() {
 
   const parser = yargs
     .default("kernel", function randomKernel() {
-      console.log("selecting a random kernel as default...");
       const name = _.sample(context.kernelspecs).name;
-      console.log(`chose ${name}`);
       return name;
     })
     .alias("k", "kernel")

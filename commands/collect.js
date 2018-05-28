@@ -105,18 +105,19 @@ async function runNotebook(context: Context) {
   spawn.stdout.on("data", data => {
     hasStarted = true;
     const text = data.toString();
-    console.log("KERNEL STDOUT: ", text);
+    console.error(chalk.bold.yellow("-- KERNEL STDOUT --"));
+    console.error(chalk.dim.yellow(text));
   });
   spawn.stderr.on("data", data => {
     hasStarted = true;
     const text = data.toString();
-    console.log("KERNEL STDERR: ", text);
+    console.error(chalk.bold.red("KERNEL STDERR: "));
+    console.error(chalk.dim.red(text));
   });
 
   spawn.on("close", code => {
-    console.log(code);
     if (code) {
-      console.log("closed early and poorly", code);
+      console.error("closed early and poorly", code);
       process.exit(code);
     }
     // If the process ends early, we should too in this case
@@ -136,7 +137,6 @@ async function runNotebook(context: Context) {
   });
 
   const messageCollections = {};
-  const outputCollections = {};
 
   //// OH SNAP, if it fails to launch yet doesn't die above here we are possibly waiting forever
   // Set up an Rx Subject to send and receive Jupyter messages
@@ -190,10 +190,27 @@ async function runNotebook(context: Context) {
       ? cell.source.join("")
       : cell.source;
 
-    const executionMessage = messaging.executeRequest(source);
-
     // Send execution
+    // Technically this should come after we've set up the
+    // subscription below
+    const executionMessage = messaging.executeRequest(source);
     channels.next(executionMessage);
+
+    let errored = false;
+
+    // We should break on an error
+    channels
+      .pipe(
+        messaging.childOf(executionMessage),
+        messaging.ofMessageType("execute_reply"),
+        filter(msg => msg.content.status === "error"),
+        mapTo(true),
+        first()
+      )
+      .subscribe(m => {
+        errored = true;
+      });
+
     // Know that we can execute the next one when we get an idle for
     // the prior id
     await channels
@@ -205,50 +222,34 @@ async function runNotebook(context: Context) {
         first()
       )
       .toPromise();
-  }
 
-  console.log("ALL DONE");
+    // So hacky that we wait on the `idle` happening
+    if (errored) {
+      break;
+    }
+  }
 
   _.forEach(messageCollections, (collection, parent_id) => {
     collection.forEach(msg => {
       if (!msg.content) {
         return;
       }
-      console.log(chalk.bold(msg.header.msg_type));
-      console.log(treeify.asTree(msg.content, true));
+      // console.log(chalk.bold(msg.header.msg_type));
+      // console.log(treeify.asTree(msg.content, true));
     });
   });
-  console.log("ALL DONE");
-
-  // Declaratively, we care to look over
-  // channels.next(messaging.kernelInfoRequest());
-
-  // var x = 0;
-  //
-  // while (x < 4) {
-  //   let msg = await channels.pipe(first()).toPromise();
-  //
-  //   console.log(chalk.bold(msg.header.msg_type));
-  //   console.log(
-  //     treeify.asTree(_.omit(msg, ["buffers", "parent_header"]), true)
-  //   );
-  //
-  //   x++;
-  // }
-
-  // Allow leftovers
-  await sleep(1000);
 
   /** CLEAN UP **/
 
-  // Stop the child process for the kernel
-  spawn.kill();
+  // Ideally, we'd send a shutdown request before all this
 
-  // Close the subject
+  // Close the zeromq socket
   channels.complete();
-
   // Close the subscription
   subscription.unsubscribe();
+
+  // Stop the child process for the kernel
+  spawn.kill();
 
   // Clean up the connection file
   fs.unlinkSync(connectionFile);
