@@ -234,8 +234,8 @@ async function runNotebook(context: Context) {
       if (!msg.content) {
         return;
       }
-      // console.log(chalk.bold(msg.header.msg_type));
-      // console.log(treeify.asTree(msg.content, true));
+      console.log(chalk.bold(msg.header.msg_type));
+      console.log(treeify.asTree(msg.content, true));
     });
   });
 
